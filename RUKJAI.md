@@ -1,75 +1,85 @@
-// See https://github.com/dialogflow/dialogflow-fulfillment-nodejs
-// for Dialogflow fulfillment library docs, samples, and to report issues
-'use strict';
- 
-const functions = require('firebase-functions');
-const {WebhookClient} = require('dialogflow-fulfillment');
-const {Card, Suggestion} = require('dialogflow-fulfillment');
- 
-process.env.DEBUG = 'dialogflow:debug'; // enables lib debugging statements
- 
-exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, response) => {
-  const agent = new WebhookClient({ request, response });
-  console.log('Dialogflow Request headers: ' + JSON.stringify(request.headers));
-  console.log('Dialogflow Request body: ' + JSON.stringify(request.body));
- 
-  function welcome(agent) {
-    agent.add(`Welcome to my agent!`);
-  }
- 
-  function fallback(agent) {
-    agent.add(`I didn't understand`);
-    agent.add(`I'm sorry, can you try again?`);
-}
+import intentparser as ip
+import datetime
+import random
+import sys
 
-  function bp(agent){
-    let bp = parseInt(request.body.queryResult.parameters.number);
-    if (bp <110){
-        agent.add("อาการน่าเป็นห่วง ไปหาหมอไหม");
-    }else if (bp < 130){
-        agent.add(" ดีมาก");
-    }else{
-        agent.add("ไปหาหมอนะ")
-    }
-  }
+__author__ = 'Nonthakon Jitchiranant'
 
- 
+allIntent = []
 
-  // // Uncomment and edit to make your own intent handler
-  // // uncomment `intentMap.set('your intent name here', yourFunctionHandler);`
-  // // below to get this function to be run when a Dialogflow intent is matched
-  // function yourFunctionHandler(agent) {
-  //   agent.add(`This message is from Dialogflow's Cloud Functions for Firebase editor!`);
-  //   agent.add(new Card({
-  //       title: `Title: this is a card title`,
-  //       imageUrl: 'https://developers.google.com/actions/images/badges/XPM_BADGING_GoogleAssistant_VER.png',
-  //       text: `This is the body text of a card.  You can even use line\n  breaks and emoji! 💁`,
-  //       buttonText: 'This is a button',
-  //       buttonUrl: 'https://assistant.google.com/'
-  //     })
-  //   );
-  //   agent.add(new Suggestion(`Quick Reply`));
-  //   agent.add(new Suggestion(`Suggestion`));
-  //   agent.setContext({ name: 'weather', lifespan: 2, parameters: { city: 'Rome' }});
-  // }
+HelloIntent = ip.intentParser({
+    'description' : {
+                    "type" : 'HelloIntent',
+                    "args" : [],
+                    "keyword" : [
+                    (ip.REQUIRE, "hello_keyword"),
+                    ]},
+    'hello_keyword' : ['hello', 'hi'],
+})
+HelloIntent.teachWords(["Hello, How are you?", "Hi, Mr.John", "Hello, nice to meet you!"])
+allIntent.append(HelloIntent)
 
-  // // Uncomment and edit to make your own Google Assistant intent handler
-  // // uncomment `intentMap.set('your intent name here', googleAssistantHandler);`
-  // // below to get this function to be run when a Dialogflow intent is matched
-  // function googleAssistantHandler(agent) {
-  //   let conv = agent.conv(); // Get Actions on Google library conv instance
-  //   conv.ask('Hello from the Actions on Google client library!') // Use Actions on Google library
-  //   agent.add(conv); // Add Actions on Google library responses to your agent's response
-  // }
-  // // See https://github.com/dialogflow/dialogflow-fulfillment-nodejs/tree/master/samples/actions-on-google
-  // // for a complete Dialogflow fulfillment library Actions on Google client library v2 integration sample
+ByeIntent = ip.intentParser({
+    'description' : {
+                    "type" : 'ByeIntent',
+                    "args" : [],
+                    "keyword" : [
+                    (ip.REQUIRE, "bye_keyword"),
+                    ]},
+    'bye_keyword' : ['bye'],
+})
+ByeIntent.teachWords(["Good bye.", "Bye, Josh.", "Good bye, Be safe."])
+allIntent.append(ByeIntent)
 
-  // Run the proper function handler based on the matched Dialogflow intent name
-  let intentMap = new Map();
-  intentMap.set('Default Welcome Intent', welcome);
-  intentMap.set('Default Fallback Intent', fallback);
-  intentMap.set('BP', bp);
-  // intentMap.set('your intent name here', yourFunctionHandler);
-  // intentMap.set('your intent name here', googleAssistantHandler);
-  agent.handleRequest(intentMap);
-});
+TimeIntent = ip.intentParser({
+    'description' : {
+                    "type" : 'TimeIntent',
+                    "args" : [(ip.OPTIONAL, "scopes")],
+                    "keyword" : [
+                    (ip.REQUIRE, "time_keyword"),
+                    (ip.OPTIONAL, "scopes")
+                    ]},
+    'time_keyword' : ['is', 'are', 'what', 'how', 'clock', 'how\'s'],
+    'scopes' : [
+        "day",
+        "time"
+        ]
+})
+TimeIntent.teachWords(["What time is it?", "How's the clock", "What is this day"])
+allIntent.append(TimeIntent)
+
+while True:
+    text = input('User said : ').lower()
+    temp = []
+
+    for i in allIntent:
+        _temp = i.getResult(text)
+        try:
+            temp.append((_temp['confidence'], _temp['type']))
+        except Exception as e:
+            pass
+    try:
+        candidate = max(temp)
+        if candidate[1] == 'HelloIntent':
+            print(random.choice(['Chatbot said : Hello!',
+                                'Chatbot said : How are you?',
+                                'Chatbot said : What\'s up!']))
+        elif candidate[1] == 'ByeIntent':
+            print(random.choice(['Chatbot said : Good bye!',
+                                'Chatbot said : Good Luck!',
+                                'Chatbot said : See ya!']))
+            sys.exit(0)
+        elif candidate[1] == 'TimeIntent':
+            typeOfTime = TimeIntent.getResult(text)['args']
+            typeOfTime = [item for item in typeOfTime if item[0] == 'scopes'][0][1]
+            now = datetime.datetime.now()
+            if typeOfTime == ['day']:
+                print("Chatbot said : Today is {}/{}/{}".format(now.day, now.month, now.year))
+            else:
+                print("Chatbot said : It's {}:{}".format(now.hour, now.minute if now.minute > 9 else "0" + str(now.minute)))
+            del typeOfTime, now
+        else:
+            print('error')
+        del text, temp, _temp, candidate
+    except Exception as e:
+        print('Error')
